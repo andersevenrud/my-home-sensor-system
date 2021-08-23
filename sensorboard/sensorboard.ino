@@ -5,6 +5,8 @@
  */
 #include <AirQuality.h>
 #include <DHT.h>
+#include <DpsClass.h>
+#include <Dps310.h>
 #include <rgb_lcd.h>
 
 ///////////////////////////////////////////////////////////////////////
@@ -36,11 +38,13 @@ int lightCurrentValue = -1;
 char* airQualityCurrentValue = airQualities[0];
 int airQualityCurrent = -1;
 float tempAndHumidityCurrentValue[2] = {0, 0};
+float pressureCurrentValue = 0;
 int buttonCurrentValue = LOW;
 int viewCount = 4;
 int viewCurrent = 0;
 DHT dht(TEMP_HUMID_SENSOR_PIN, TEMP_HUMID_SENSOR_TYPE);
 AirQuality airQualitySensor;
+Dps310 Dps310PressureSensor = Dps310();
 rgb_lcd lcd;
 
 ///////////////////////////////////////////////////////////////////////
@@ -71,6 +75,7 @@ void printLCD() {
 void setupSensors() {
   dht.begin();
   airQualitySensor.init(AIR_QUALITY_SENSOR_PIN);
+  Dps310PressureSensor.begin(Wire);
 }
 
 void readLightSensor() {
@@ -92,6 +97,14 @@ void readAirQualitySensor() {
     airQualityCurrent = quality;
   }
   airQualityCurrentValue = airQualities[airQualityCurrent + 1];
+}
+
+void readPressureSensor() {
+  float pressure;
+  uint8_t oversampling = 7;
+
+  Dps310PressureSensor.measurePressureOnce(pressure, oversampling);
+  pressureCurrentValue = pressure / 100;
 }
 
 void readTempAndHumiditySensor() {
@@ -169,18 +182,22 @@ void dump() {
   char metricSound[64];
   char metricQuality[64];
   char metricQualityRaw[64];
+  char metricPressureRaw[64];
 
   char tempString[5];
   char humidityString[5];
+  char pressureString[8];
   dtostrf(tempAndHumidityCurrentValue[0], 3, 1, humidityString);
   dtostrf(tempAndHumidityCurrentValue[1], 3, 1, tempString);
+  dtostrf(pressureCurrentValue, 4, 2, pressureString);
 
   sprintf(metricTemp, "grove_sensor_temperature %s", tempString);
   sprintf(metricHumidity, "grove_sensor_humidity %s", humidityString);
   sprintf(metricLight, "grove_sensor_light %d", lightCurrentValue);
   sprintf(metricSound, "grove_sensor_sound %lu", soundCurrentValue);
   sprintf(metricQuality, "grove_sensor_quality %d", airQualityCurrent);
-  sprintf(metricQualityRaw, "grove_sensor_quality_raw %d", airQualitySensor.first_vol);
+  sprintf(metricQualityRaw, "grove_sensor_quality_raw %d", 0); //airQualitySensor.first_vol);
+  sprintf(metricPressureRaw, "grove_sensor_pressure_raw %s", pressureString);
 
   Serial.println(metricTemp);
   Serial.println(metricHumidity);
@@ -188,6 +205,7 @@ void dump() {
   Serial.println(metricSound);
   Serial.println(metricQuality);
   Serial.println(metricQualityRaw);
+  Serial.println(metricPressureRaw);
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -214,6 +232,7 @@ void loop() {
   readSoundSensor();
   readAirQualitySensor();
   readTempAndHumiditySensor();
+  readPressureSensor();
 
   int diffTime = millis() - startTime;
   render(diffTime);
