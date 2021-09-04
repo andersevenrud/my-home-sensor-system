@@ -16,10 +16,13 @@
 #define SOUND_SENSOR_PIN A3
 #define LIGHT_SENSOR_PIN A2
 #define AIR_QUALITY_SENSOR_PIN A1
+#define AIR_QUALITY_SAMPLES 122
 #define TEMP_HUMID_SENSOR_PIN A0
 #define TEMP_HUMID_SENSOR_TYPE DHT22
 #define BUTTON_PIN 2
 #define LED_PIN 4
+#define CYCLE_TIME 1000
+//#define ENABLE_LCD 1
 
 byte heartCharacter[8] = { 0b00000, 0b01010, 0b11111, 0b11111, 0b11111, 0b01110, 0b00100, 0b00000 };
 byte bucketEmpty[8] = { 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b11111 };
@@ -31,8 +34,8 @@ char airQualities[5][3] = { "--", "??", "LO", "MD", "HI" };
 // STATE
 ///////////////////////////////////////////////////////////////////////
 
-char message1[16] = "Initializing...";
-char message2[16] = "(andersevenrud)";
+String message1 = "Initializing...";
+String message2 = "(andersevenrud)";
 long soundCurrentValue = -1;
 int lightCurrentValue = -1;
 char* airQualityCurrentValue = airQualities[0];
@@ -52,20 +55,24 @@ rgb_lcd lcd;
 ///////////////////////////////////////////////////////////////////////
 
 void setupLCD() {
+#ifdef ENABLE_LCD
   lcd.begin(16, 2);
   lcd.setRGB(10, 10, 10);
   lcd.createChar(1, heartCharacter);
   lcd.createChar(2, bucketEmpty);
   lcd.createChar(3, bucketHalfEmpty);
   lcd.createChar(4, bucketFull);
+#endif
 }
 
 void printLCD() {
+#ifdef ENABLE_LCD
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print(message1);
+  lcd.print(message1.substring(0, 16));
   lcd.setCursor(0, 1);
-  lcd.print(message2);
+  lcd.print(message2.substring(0, 16));
+#endif
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -133,71 +140,81 @@ void readButton() {
 void render(int diffTime) {
   switch (viewCurrent) {
     case 0: {
-      int lightPercentage = map(lightCurrentValue, 0, 800, 0, 100);
-      int soundPercentage = map(soundCurrentValue, 0, 1023, 0, 100);
-      char tempString[5];
-      char humidityString[5];
+      String lightPercentage = String(map(lightCurrentValue, 0, 800, 0, 100));
+      String soundPercentage = String(map(soundCurrentValue, 0, 1023, 0, 100));
+      String tempString = String(tempAndHumidityCurrentValue[1], 1);
+      String humidityString = String(tempAndHumidityCurrentValue[0], 1);
+      String quality = String(airQualityCurrentValue);
+      String qualityFirst = String(airQualitySensor.first_vol);
 
-      dtostrf(tempAndHumidityCurrentValue[0], 3, 1, humidityString);
-      dtostrf(tempAndHumidityCurrentValue[1], 3, 1, tempString);
-
-      sprintf(message1, "%sC %s%%   %s", tempString, humidityString, airQualityCurrentValue);
-      sprintf(message2, "%dL %dS %dQ", lightPercentage, soundPercentage, airQualitySensor.first_vol);
+      message1 = tempString + "C" + " " + humidityString + "%" + "   " + quality;
+      message2 = lightPercentage + "L" + " " + soundPercentage + "S" + " " + qualityFirst + "Q";
     }
     break;
 
     case 1: {
       int lightIntensity = map(lightCurrentValue, 0, 800, 0, 2);
-      int soundIntensity = map(soundCurrentValue, 0, 1023, 0, 2);
+      String light = String(lightCurrentValue);
+      String lightIntensityString = String(lightIntensity);
+      String lightIntensityIcon = String(char(lightIntensity + 2));
 
-      sprintf(message1, "Light %4d %c %d", lightCurrentValue, char(lightIntensity + 2), lightIntensity);
-      sprintf(message2, "Sound %4lu %c %d", soundCurrentValue, char(soundIntensity + 2), soundIntensity);
+      int soundIntensity = map(soundCurrentValue, 0, 1023, 0, 2);
+      String sound = String(soundCurrentValue);
+      String soundIntensityString = String(soundIntensity);
+      String soundIntensityIcon = String(char(soundIntensity + 2));
+
+      message1 = "Light " + light + " " + lightIntensityIcon + " " + lightIntensityString;
+      message2 = "Sound " + sound + " " + soundIntensityIcon + " " + soundIntensityString;
     }
     break;
 
     case 2: {
       int qualityIntensity = map(airQualityCurrent, -1, 3, 0, 2);
+      String first = String(airQualitySensor.first_vol);
+      String last = String(airQualitySensor.last_vol);
+      String icon = String(char(qualityIntensity + 2));
 
-      sprintf(message1, "Quality %c %d/3", char(qualityIntensity + 2), airQualityCurrent);
-      sprintf(message2, "Quality %d^%d", airQualitySensor.first_vol, airQualitySensor.last_vol);
+      message1 = "Quality " + icon + " " + airQualityCurrent + "/3";
+      message2 = "Quality " + first + "^" + last;
     }
     break;
 
     case 3:
-      sprintf(message1, "Update time (ms)");
-      sprintf(message2, "%d", diffTime);
+      message1 = "Update time (ms)";
+      message2 = diffTime;
     break;
 
     default:
-      sprintf(message1, "Invalid view");
-      sprintf(message2, "%d", viewCurrent);
+      message1 = "Invalid view";
+      message2 = viewCurrent;
     break;
   }
 }
 
 void dump() {
-  char metricTemp[64];
-  char metricHumidity[64];
-  char metricLight[64];
-  char metricSound[64];
-  char metricQuality[64];
-  char metricQualityRaw[64];
-  char metricPressureRaw[64];
+  String tempString = String(tempAndHumidityCurrentValue[1], 1);
+  String metricTemp = "grove_sensor_temperature ";
+  metricTemp += tempString;
 
-  char tempString[5];
-  char humidityString[5];
-  char pressureString[8];
-  dtostrf(tempAndHumidityCurrentValue[0], 3, 1, humidityString);
-  dtostrf(tempAndHumidityCurrentValue[1], 3, 1, tempString);
-  dtostrf(pressureCurrentValue, 4, 2, pressureString);
+  String humidityString = String(tempAndHumidityCurrentValue[0], 1);
+  String metricHumidity = "grove_sensor_humidity ";
+  metricHumidity += humidityString;
 
-  sprintf(metricTemp, "grove_sensor_temperature %s", tempString);
-  sprintf(metricHumidity, "grove_sensor_humidity %s", humidityString);
-  sprintf(metricLight, "grove_sensor_light %d", lightCurrentValue);
-  sprintf(metricSound, "grove_sensor_sound %lu", soundCurrentValue);
-  sprintf(metricQuality, "grove_sensor_quality %d", airQualityCurrent);
-  sprintf(metricQualityRaw, "grove_sensor_quality_raw %d", 0); //airQualitySensor.first_vol);
-  sprintf(metricPressureRaw, "grove_sensor_pressure_raw %s", pressureString);
+  String metricLight = "grove_sensor_light ";
+  metricLight += lightCurrentValue;
+
+  String metricSound = "grove_sensor_sound ";
+  metricSound += soundCurrentValue;
+
+  String metricQuality = "grove_sensor_quality ";
+  metricQuality += airQualityCurrent;
+
+  String metricQualityRaw = "grove_sensor_quality_raw ";
+  metricQualityRaw += airQualitySensor.first_vol;
+
+  String pressureString = String(pressureCurrentValue, 2);
+  String metricPressureRaw = "grove_sensor_pressure ";
+  metricPressureRaw += pressureString;
 
   Serial.println(metricTemp);
   Serial.println(metricHumidity);
@@ -240,12 +257,12 @@ void loop() {
   dump();
   digitalWrite(LED_PIN, HIGH);
 
-  int sleepTime = max(0, 1000 - diffTime);
+  int sleepTime = max(0, CYCLE_TIME - diffTime);
   delay(sleepTime);
 }
 
 ISR(TIMER2_OVF_vect) {
-  if(airQualitySensor.counter == 122) {
+  if(airQualitySensor.counter == AIR_QUALITY_SAMPLES) {
     airQualitySensor.last_vol = airQualitySensor.first_vol;
     airQualitySensor.first_vol = analogRead(AIR_QUALITY_SENSOR_PIN);
     airQualitySensor.counter = 0;
