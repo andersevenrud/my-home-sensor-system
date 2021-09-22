@@ -9,9 +9,8 @@ const Delimiter = require('@serialport/parser-delimiter')
 const client = require('prom-client')
 const express = require('express')
 
-const SERIAL = '/dev/ttyACM1'
-const PORT = 9012
-const RECONNECT = 1000 * 30
+const SERIAL = '/dev/ttyACM0'
+const PORT = 3010
 const MATCHER = /^grove_sensor/
 
 const gauges = {}
@@ -19,6 +18,15 @@ const server = express()
 const port = new Serial(SERIAL, { autoOpen: false, baudRate: 9600 })
 const parser = port.pipe(new Delimiter({ delimiter: '\n' }))
 const state = { open: false }
+
+let timeout
+
+const createTimeout = () => {
+  clearTimeout(timeout)
+  timeout = setTimeout(() => {
+    process.exit(1)
+  }, 1000 * 30)
+}
 
 const check = (req, res, next) => state.open
   ? next()
@@ -41,12 +49,10 @@ const parse = (data) =>  {
   }
 }
 
-port.on('close', () => (state.open = false))
-port.on('close', () => console.warn('Serial port', SERIAL, 'closed...'))
-port.on('close', () => setTimeout(() => port.open(), RECONNECT))
-port.on('open', () => (state.open = true))
 port.on('open', () => console.log('Serial port', SERIAL, 'opened...'))
 port.on('error', (err) => console.error('Serial port error', err))
+port.on('error', () => process.exit(1))
+port.on('close', () => process.exit(1))
 parser.on('data', parse);
 server.get('/metrics', check, metrics)
 server.listen(PORT, () => console.info('Listening on', PORT))
