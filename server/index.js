@@ -44,11 +44,12 @@ const parse = (data) =>  {
       gauges[k] = gauges[k] || new client.Gauge({ name: k, help: k })
       gauges[k].set(v.match(/^\d+$/) ? parseInt(v) : parseFloat(v))
     } catch (e) {
-      console.warn(k, v, e)
+      console.warn(e)
     }
   }
 }
 
+port.on('open', () => (state.open = true))
 port.on('open', () => console.log('Serial port', SERIAL, 'opened...'))
 port.on('error', (err) => console.error('Serial port error', err))
 port.on('error', () => process.exit(1))
